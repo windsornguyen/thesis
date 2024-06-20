@@ -71,16 +71,16 @@ else
 fi
 
 # Environment module management
-module purge
-module load anaconda3/2024.2
-module load cudatoolkit/12.4
+# module purge
+# module load anaconda3/2024.2
+# module load cudatoolkit/12.4
 
 # Activate the conda environment
-conda activate thesis
-if [ $? -ne 0 ]; then
-    echo "Failed to activate conda environment. Exiting."
-    exit 1
-fi
+# conda activate thesis
+# if [ $? -ne 0 ]; then
+#     echo "Failed to activate conda environment. Exiting."
+#     exit 1
+# fi
 
 # Set the CUDA_VISIBLE_DEVICES environment variable
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
@@ -93,9 +93,9 @@ fi
 
 # Determine the execution mode based on WORLD_SIZE
 if [[ "$WORLD_SIZE" -eq "1" ]]; then
-    torchrun --standalone --rdzv_backend=c10d --rdzv_endpoint=$DIST_MASTER_ADDR:$DIST_MASTER_PORT test.py --model stu
+    torchrun --standalone --rdzv_backend=c10d --rdzv_endpoint=$DIST_MASTER_ADDR:$DIST_MASTER_PORT pretrain.py --model stu
 else
-    torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE --rdzv_backend=c10d --rdzv_endpoint=$DIST_MASTER_ADDR:$DIST_MASTER_PORT test.py --model stu
+    torchrun --nproc_per_node=$SLURM_NTASKS_PER_NODE --rdzv_backend=c10d --rdzv_endpoint=$DIST_MASTER_ADDR:$DIST_MASTER_PORT pretrain.py --model stu
 fi
 
 ##################### HELPFUL DELLA COMMANDS #####################
