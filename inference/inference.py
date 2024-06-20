@@ -1,118 +1,81 @@
 import torch
-import torch.nn as nn
-import os
-import numpy as np
+import torch.nn.functional as F
+import tiktoken
+
+from time import time
 from tqdm import tqdm
+from model.stu import SSSMConfigs, SpectralStateSpaceModel
 
-from model.model import SSM, SSMConfig
+device = ('cuda' if torch.cuda.is_available() else 'cpu')
 
-# hyperparameters
-batch_size = 128  # how many independent sequences will we process in parallel?
-ctxt_len = 1_024  # what is the maximum context length for predictions?
-max_iters = 1
-eval_interval = 25
-learning_rate = 1e-3
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-eval_iters = 25
-d_embd = 64
-n_head = 4
-n_layer = 1
-dropout = 0.0
-bias = True
-# ------------
+print(f'Using device: {device}')
 
-torch.manual_seed(1337)
-dataset = 'tiny_shakespeare'
+# Load the checkpoint
+print('Loading the checkpoint...')
+start_time = time()
+checkpoint = torch.load('inference/model_00634.pt', map_location=device)
+print(f'Successfully loaded the checkpoint in {time() - start_time:.2f} seconds')
 
-# data loading
-data_dir = os.path.join('data', dataset)
+configs = SSSMConfigs(
+    n_embd=768,
+    block_size=1_024,
+    vocab_size=50_304,
+    num_layers=6,
+    dropout=0.10,
+    input_len=1_024,
+    scale=4,
+    bias=True,
+    num_eigh=24,
+    auto_reg_k_u=3,
+    auto_reg_k_y=2,
+    learnable_m_y=True,
+)
+model = SpectralStateSpaceModel(configs)
+model = torch.compile(model)
 
-def get_batch(split):
-    # We recreate np.memmap every batch to avoid a memory leak, as per
-    # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
-    if split == 'train':
-        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
-    else:
-        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-    ix = torch.randint(len(data) - ctxt_len, (batch_size,))
-    x = torch.stack([torch.from_numpy((data[i:i+ctxt_len]).astype(np.int64)) for i in ix])
-    y = torch.stack([torch.from_numpy((data[i+1:i+1+ctxt_len]).astype(np.int64)) for i in ix])
-    if device == 'cuda':
-        # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
-    else:
-        x, y = x.to(device), y.to(device)
-    return x, y
-
-@torch.no_grad()
-def estimate_loss():
-    out = {}
-    model.eval()
-    for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters)
-        for k in range(eval_iters):
-            X, Y = get_batch(split)
-            logits, loss = model(X, Y)
-            losses[k] = loss.item()
-        out[split] = losses.mean()
-    model.train()
-    return out
-
-model_args = dict(n_layer=n_layer, n_head=n_head, d_embd=d_embd, ctxt_len=ctxt_len,
-                  bias=bias, vocab_size=None, dropout=dropout)
-meta_vocab_size = None  # Add this line to define meta_vocab_size
-model_args['vocab_size'] = 65  # Set vocab_size to 65 for tiny_shakespeare dataset
-config = SSMConfig(**model_args)
-model = SSM(config)
-m = model.to(device)
-# print the number of parameters in the model
-print(sum(p.numel() for p in m.parameters())/1e6, 'M parameters')
-
-# create a PyTorch optimizer
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-
-pbar = tqdm(range(max_iters), desc='Training', unit='iter')
-
-for iter in pbar:
-    # every once in a while evaluate the loss on train and val sets
-    if iter % eval_interval == 0 or iter == max_iters - 1:
-        losses = estimate_loss()
-        pbar.set_postfix({'train_loss': losses['train'], 'val_loss': losses['val']})
-
-    # sample a batch of data
-    xb, yb = get_batch('train')
-
-    # evaluate the loss
-    logits, loss = model(xb, yb)
-
-    # Check if any inputs, outputs or weights contain NaNs
-    if torch.isnan(logits).any() or torch.isnan(loss):
-        print("NaN detected!")
-        print("Inputs: ", xb)
-        print("Outputs: ", logits)
-        print("Loss: ", loss)
-        for name, param in model.named_parameters():
-            if torch.isnan(param).any():
-                print(f"NaN in {name}")
-
-    optimizer.zero_grad(set_to_none=True)
-    loss.backward()
-
-    # Print gradients to check for NaN and compute grad norm
-    grad_norm = 0.0
-    for name, param in model.named_parameters():
-        if param.grad is not None:
-            grad_norm += param.grad.data.norm(2).item() ** 2
-            if torch.isnan(param.grad).any():
-                print(f"NaN gradient in {name}")
-    grad_norm = grad_norm ** 0.5
-    pbar.set_postfix({'train_loss': loss.item(), 'grad_norm': grad_norm})
-
-    optimizer.step()
-
-# generate from the model
-print('Generating text...')
+# Load the saved states into the model
+model.load_state_dict(checkpoint['model'])
+model.to(device)
+print(
+    f"Successfully loaded the model from step {checkpoint['step']} with validation loss {checkpoint['val_loss']}"
+)
 model.eval()
-context = torch.zeros((1, 1), dtype=torch.long, device=device)
-generated_text = model.generate(context, max_new_tokens=2_000)[0].tolist()
-print(generated_text)
+
+# Prepare generation
+tokenizer = tiktoken.get_encoding('gpt2')
+num_return_sequences = 5
+max_length = 16
+prompt = "Hi, I'm a language model,"
+tokens = tokenizer.encode(prompt)
+tokens = torch.tensor(tokens, dtype=torch.long)
+tokens = tokens.unsqueeze(0).repeat(num_return_sequences, 1)
+xgen = tokens.to(device)
+sample_rng = torch.Generator(device=device)
+sample_rng.manual_seed(42)
+
+print(
+    f"\nGenerating {num_return_sequences} sequences of maximum length {max_length} based on the prompt: '{prompt}'"
+)
+
+with torch.no_grad():
+    with tqdm(total=max_length - xgen.size(1), desc='Generating') as pbar:
+        while xgen.size(1) < max_length:
+            with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                logits, _ = model(xgen)  # (B, T, vocab_size)
+            logits = logits[:, -1, :]  # (B, vocab_size)
+            probs = F.softmax(logits, dim=-1)
+            topk_probs, topk_indices = torch.topk(probs, 50, dim=-1)
+            ix = torch.multinomial(
+                topk_probs, 1, generator=sample_rng
+            )  # (B, 1)
+            xcol = torch.gather(topk_indices, -1, ix)  # (B, 1)
+            xgen = torch.cat((xgen, xcol), dim=1)
+            pbar.update(1)
+
+# Print the generated text
+print()
+for i in range(num_return_sequences):
+    tokens = xgen[i, :].tolist()
+    decoded = tokenizer.decode(tokens)
+    print(f'Sample {i+1}: {decoded}')
+    print()

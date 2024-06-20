@@ -45,7 +45,7 @@ def main():
     # SSSM-specific hyperparameters
     n_embd_sssm = 768
     input_len = 1_024
-    bias = True
+    bias = False
     num_eigh = 24
     auto_reg_k_u = 3
     auto_reg_k_y = 2

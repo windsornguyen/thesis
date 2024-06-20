@@ -3,6 +3,8 @@
 # File: train.py
 # ==============================================================================#
 
+# TODO: Not yet updated (only the Non-Della version has been tested).
+
 """Distributed training and testing for an STU-based language model."""
 
 import argparse

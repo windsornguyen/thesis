@@ -1,4 +1,46 @@
+# Checkpoints
+log/
+*.pt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.py[cod]
+*$py.class
+
+# Large datasets
 data/TinyStories/
 data/edu_fineweb10B/
+data/hellaswag/
+
+# Environments
 .venv/
-log/
+venv/
+ENV/
+env/
+env.bak/
+.env
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# IDE and editor files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+*.bak
+.zed/
+.empty/
+
+# Miscellaneous
+.DS_Store
+Thumbs.db

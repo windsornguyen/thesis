@@ -1,0 +1,71 @@
+[tool.poetry]
+name = "sage"
+version = "1.0"
+description = "Setup manager for Windsor Nguyen's Princeton Senior Thesis"
+authors = ["Windsor Nguyen <mn4560@princeton.edu>"]
+license = "Apache 2.0"
+readme = "README.md"
+homepage = "https://github.com/windsornguyen/thesis"
+repository = "https://github.com/windsornguyen/thesis"
+keywords = ["pytorch", "machine learning", "spectral state space models"]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.12"
+torch = "2.3.1"
+tqdm = "4.66.4"
+numpy = "1.26.4"
+datasets = "^2.12.0"
+tiktoken = "^0.4.0"
+
+[tool.poetry.dev-dependencies]
+ipykernel = "^6.29.3"
+ruff = "^0.3.7"
+
+[tool.ruff]
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out", 
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+line-length = 80
+indent-width = 4
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B", "Q"]
+ignore = []
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "single"
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
